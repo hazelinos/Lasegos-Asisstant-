@@ -21,19 +21,19 @@ const client = new Client({
 const commands = [
   new SlashCommandBuilder()
     .setName('ping')
-    .setDescription('Cek apakah bot aktif.'),
+    .setDescription('Cek apakah bot aktif'),
 
   new SlashCommandBuilder()
     .setName('help')
-    .setDescription('Lihat daftar bantuan bot.'),
+    .setDescription('Lihat daftar bantuan bot'),
 
   new SlashCommandBuilder()
     .setName('clear')
-    .setDescription('Hapus pesan di channel ini.')
+    .setDescription('Hapus pesan di channel ini')
     .addIntegerOption(option =>
       option
         .setName('jumlah')
-        .setDescription('Jumlah pesan yang dihapus.')
+        .setDescription('Jumlah pesan yang dihapus')
         .setRequired(true)
         .setMinValue(1)
         .setMaxValue(100)
