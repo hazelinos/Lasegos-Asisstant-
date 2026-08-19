@@ -115,7 +115,7 @@ client.on('interactionCreate', async (interaction) => {
   if (interaction.commandName === 'tanya') {
     if (!groqKey) {
       return interaction.reply({
-        content: '❌ GROQ_API_KEY belum diatur di Environment WispByte',
+        content: '❌ GROQ_API_KEY belum diatur di Environment',
         ephemeral: true
       });
     }
@@ -131,7 +131,7 @@ client.on('interactionCreate', async (interaction) => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
+          model: 'llama-3.1-8b-instant',
           messages: [
             {
               role: 'system',
