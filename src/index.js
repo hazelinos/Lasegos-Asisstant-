@@ -8,6 +8,7 @@ const {
 } = require('discord.js');
 
 const token = process.env.DISCORD_TOKEN;
+const groqKey = process.env.GROQ_API_KEY;
 
 if (!token) {
   console.error('Missing DISCORD_TOKEN environment variable.');
@@ -38,7 +39,18 @@ const commands = [
         .setMinValue(1)
         .setMaxValue(100)
     )
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
+
+  new SlashCommandBuilder()
+    .setName('tanya')
+    .setDescription('Tanyakan sesuatu kepada AI')
+    .addStringOption(option =>
+      option
+        .setName('pertanyaan')
+        .setDescription('Pertanyaan yang ingin ditanyakan')
+        .setRequired(true)
+        .setMaxLength(2000)
+    )
 ].map(command => command.toJSON());
 
 client.once('ready', async (readyClient) => {
@@ -50,7 +62,7 @@ client.once('ready', async (readyClient) => {
       Routes.applicationCommands(readyClient.user.id),
       { body: commands }
     );
-    console.log('Global slash commands registered: /ping, /help, /clear');
+    console.log('Global slash commands registered: /ping, /help, /clear, /tanya');
   } catch (error) {
     console.error('Failed to register slash commands:', error);
   }
@@ -69,7 +81,8 @@ client.on('interactionCreate', async (interaction) => {
         '**Lasegos Assistant**\n\n' +
         '`/ping` — Cek apakah bot aktif\n' +
         '`/help` — Lihat daftar bantuan bot\n' +
-        '`/clear jumlah` — Hapus pesan di channel ini',
+        '`/clear jumlah` — Hapus pesan di channel ini\n' +
+        '`/tanya pertanyaan` — Tanyakan sesuatu kepada AI',
       ephemeral: true
     });
   }
@@ -96,6 +109,66 @@ client.on('interactionCreate', async (interaction) => {
         content: '❌ Gagal menghapus pesan. Pastikan bot punya izin **Manage Messages** dan **Read Message History**.',
         ephemeral: true
       });
+    }
+  }
+
+  if (interaction.commandName === 'tanya') {
+    if (!groqKey) {
+      return interaction.reply({
+        content: '❌ GROQ_API_KEY belum diatur di Environment WispByte',
+        ephemeral: true
+      });
+    }
+
+    const question = interaction.options.getString('pertanyaan', true);
+    await interaction.deferReply();
+
+    try {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${groqKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            {
+              role: 'system',
+              content: 'Kamu adalah asisten Discord yang ramah. Jawab dalam bahasa Indonesia kecuali pengguna meminta bahasa lain. Jawab dengan jelas dan ringkas.'
+            },
+            {
+              role: 'user',
+              content: question
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 1024
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error('Groq API error:', data);
+        return interaction.editReply('❌ Gagal mendapatkan jawaban dari AI');
+      }
+
+      const answer = data.choices?.[0]?.message?.content?.trim();
+
+      if (!answer) {
+        return interaction.editReply('❌ AI tidak memberikan jawaban');
+      }
+
+      const chunks = answer.match(/[\s\S]{1,1900}/g) || [];
+      await interaction.editReply(chunks[0]);
+
+      for (let i = 1; i < chunks.length; i++) {
+        await interaction.followUp(chunks[i]);
+      }
+    } catch (error) {
+      console.error('Failed to contact Groq:', error);
+      await interaction.editReply('❌ Terjadi kesalahan saat menghubungi AI');
     }
   }
 });
