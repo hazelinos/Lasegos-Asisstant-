@@ -21,19 +21,19 @@ const client = new Client({
 const commands = [
   new SlashCommandBuilder()
     .setName('ping')
-    .setDescription('Check whether Lasegos Assistant is online.'),
+    .setDescription('Cek apakah bot aktif.'),
 
   new SlashCommandBuilder()
     .setName('help')
-    .setDescription('Show available Lasegos Assistant commands.'),
+    .setDescription('Lihat daftar bantuan bot.'),
 
   new SlashCommandBuilder()
     .setName('clear')
-    .setDescription('Delete messages from this channel.')
+    .setDescription('Hapus pesan di channel ini.')
     .addIntegerOption(option =>
       option
         .setName('jumlah')
-        .setDescription('Number of messages to delete (1-100).')
+        .setDescription('Jumlah pesan yang dihapus.')
         .setRequired(true)
         .setMinValue(1)
         .setMaxValue(100)
@@ -67,9 +67,9 @@ client.on('interactionCreate', async (interaction) => {
     await interaction.reply({
       content:
         '**Lasegos Assistant**\n\n' +
-        '`/ping` — Check bot latency\n' +
-        '`/help` — Show this help menu\n' +
-        '`/clear jumlah` — Delete messages (1-100)',
+        '`/ping` — Cek apakah bot aktif\n' +
+        '`/help` — Lihat daftar bantuan bot\n' +
+        '`/clear jumlah` — Hapus pesan di channel ini',
       ephemeral: true
     });
   }
