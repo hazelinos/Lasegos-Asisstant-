@@ -54,7 +54,7 @@ const commands = [
 ].map(command => command.toJSON());
 
 client.once('ready', async (readyClient) => {
-  console.log(`Lasegos Assistant online as ${readyClient.user.tag}`);
+  console.log(`Hazelinos online as ${readyClient.user.tag}`);
 
   try {
     const rest = new REST({ version: '10' }).setToken(token);
@@ -78,7 +78,7 @@ client.on('interactionCreate', async (interaction) => {
   if (interaction.commandName === 'help') {
     await interaction.reply({
       content:
-        '**Lasegos Assistant**\n\n' +
+        '**Hazelinos**\n\n' +
         '`/ping` — Cek apakah bot aktif\n' +
         '`/help` — Lihat daftar bantuan bot\n' +
         '`/clear jumlah` — Hapus pesan di channel ini\n' +
@@ -136,7 +136,7 @@ client.on('interactionCreate', async (interaction) => {
             systemInstruction: {
               parts: [
                 {
-                  text: 'Kamu adalah Lasegos Assistant, asisten Discord yang ramah. Jawab dalam bahasa Indonesia kecuali pengguna meminta bahasa lain. Jawab dengan jelas, akurat, dan ringkas. Jangan mengarang fakta. Jika informasi bisa berubah, nyatakan ketidakpastian dan gunakan tanggal yang relevan.'
+                  text: 'Kamu adalah Hazelinos, asisten Discord yang ramah. Jawab dalam bahasa Indonesia kecuali pengguna meminta bahasa lain. Jawab dengan jelas, akurat, dan ringkas. Jangan mengarang fakta. Jika informasi bisa berubah, nyatakan ketidakpastian dan gunakan tanggal yang relevan.'
                 }
               ]
             },
