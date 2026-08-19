@@ -12,7 +12,7 @@ const {
   StringSelectMenuBuilder
 } = require('discord.js');
 
-const { getUser, getCard, gacha, formatCard, tierInfo } = require('./cardGame');
+const { getUser, getCard, gacha, formatCard } = require('./cardGame');
 
 const token = process.env.DISCORD_TOKEN;
 const geminiKey = process.env.GEMINI_API_KEY;
@@ -29,13 +29,11 @@ const commands = [
   new SlashCommandBuilder().setName('ping').setDescription('Cek apakah bot aktif'),
   new SlashCommandBuilder().setName('help').setDescription('Lihat daftar bantuan bot'),
   new SlashCommandBuilder()
-    .setName('clear')
-    .setDescription('Hapus pesan di channel ini')
+    .setName('clear').setDescription('Hapus pesan di channel ini')
     .addIntegerOption(option => option.setName('jumlah').setDescription('Jumlah pesan yang dihapus').setRequired(true).setMinValue(1).setMaxValue(100))
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
   new SlashCommandBuilder()
-    .setName('tanya')
-    .setDescription('Tanyakan sesuatu kepada AI')
+    .setName('tanya').setDescription('Tanyakan sesuatu kepada AI')
     .addStringOption(option => option.setName('pertanyaan').setDescription('Pertanyaan yang ingin ditanyakan').setRequired(true).setMaxLength(2000)),
   new SlashCommandBuilder().setName('game').setDescription('Buka card game Hazelinos')
 ].map(command => command.toJSON());
@@ -60,13 +58,13 @@ function collectionText(userId) {
   }).join('\n\n');
 }
 
-function cardSelect(userId, customId = 'card:pick') {
+function cardSelect(userId, customId) {
   const user = getUser(userId);
-  const unique = [...new Set(user.cards)];
+  const unique = [...new Set(user.cards)].slice(0, 25);
   return new StringSelectMenuBuilder()
     .setCustomId(customId)
-    .setPlaceholder('Pilih kartu')
-    .addOptions(unique.slice(0, 25).map(id => {
+    .setPlaceholder('Pilih kartu kamu')
+    .addOptions(unique.map(id => {
       const card = getCard(id);
       return { label: card.name, value: card.id, description: `${card.tier} • ATK ${card.atk} • DEF ${card.def}`.slice(0, 100), emoji: card.emoji };
     }));
@@ -103,42 +101,47 @@ client.on('interactionCreate', async interaction => {
     }
 
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('card:pick:')) {
-      const duelId = interaction.customId.split(':')[2];
+      const [, , duelId, playerId] = interaction.customId.split(':');
       const duel = duels.get(duelId);
       if (!duel) return interaction.reply({ content: '❌ Duel sudah berakhir', ephemeral: true });
-      if (![duel.challenger, duel.opponent].includes(interaction.user.id)) return interaction.reply({ content: '❌ Kamu bukan pemain duel ini', ephemeral: true });
+      if (interaction.user.id !== playerId) return interaction.reply({ content: '❌ Ini bukan pilihan kartu kamu', ephemeral: true });
       if (!duel.accepted) return interaction.reply({ content: '❌ Lawan belum menerima duel', ephemeral: true });
       if (duel.choices[interaction.user.id]) return interaction.reply({ content: '❌ Kamu sudah memilih kartu', ephemeral: true });
       duel.choices[interaction.user.id] = interaction.values[0];
       await interaction.reply({ content: '✅ Kartu kamu sudah dipilih', ephemeral: true });
       if (!duel.choices[duel.challenger] || !duel.choices[duel.opponent]) return;
+
       const a = getCard(duel.choices[duel.challenger]);
       const b = getCard(duel.choices[duel.opponent]);
       const scoreA = a.atk + a.def + a.hp / 10;
       const scoreB = b.atk + b.def + b.hp / 10;
+      const challenger = getUser(duel.challenger);
+      const opponent = getUser(duel.opponent);
+      const pot = duel.wager * 2;
+      challenger.coins -= duel.wager;
+      opponent.coins -= duel.wager;
+
       let result;
       if (scoreA === scoreB) {
-        result = '🤝 **Seri!**';
+        challenger.coins += duel.wager;
+        opponent.coins += duel.wager;
+        result = '🤝 **Seri! Taruhan dikembalikan**';
       } else if (scoreA > scoreB) {
-        const winner = getUser(duel.challenger);
-        winner.coins += duel.wager;
-        winner.wins++;
-        getUser(duel.opponent).losses++;
-        result = `🏆 <@${duel.challenger}> menang dan mendapatkan **${duel.wager * 2} 🪙**`;
+        challenger.coins += pot;
+        challenger.wins++;
+        opponent.losses++;
+        result = `🏆 <@${duel.challenger}> menang dan mendapatkan **${pot} 🪙**`;
       } else {
-        const winner = getUser(duel.opponent);
-        winner.coins += duel.wager;
-        winner.wins++;
-        getUser(duel.challenger).losses++;
-        result = `🏆 <@${duel.opponent}> menang dan mendapatkan **${duel.wager * 2} 🪙**`;
+        opponent.coins += pot;
+        opponent.wins++;
+        challenger.losses++;
+        result = `🏆 <@${duel.opponent}> menang dan mendapatkan **${pot} 🪙**`;
       }
-      getUser(duel.challenger).coins -= duel.wager;
-      getUser(duel.opponent).coins -= duel.wager;
-      if (scoreA === scoreB) {
-        getUser(duel.challenger).coins += duel.wager;
-        getUser(duel.opponent).coins += duel.wager;
-      }
-      await interaction.message.edit({ content: `⚔️ **HASIL DUEL**\n\n<@${duel.challenger}>\n${formatCard(a)}\n\nVS\n\n<@${duel.opponent}>\n${formatCard(b)}\n\n${result}`, components: [mainMenu()] });
+
+      await interaction.message.edit({
+        content: `⚔️ **HASIL DUEL**\n\n<@${duel.challenger}>\n${formatCard(a)}\n\nVS\n\n<@${duel.opponent}>\n${formatCard(b)}\n\n${result}`,
+        components: [mainMenu()]
+      });
       duels.delete(duelId);
       return;
     }
@@ -177,8 +180,11 @@ client.on('interactionCreate', async interaction => {
         if (interaction.user.id !== duel.opponent) return interaction.reply({ content: '❌ Hanya lawan yang bisa menerima duel', ephemeral: true });
         duel.accepted = true;
         return interaction.update({
-          content: `⚔️ **DUEL DIMULAI**\n\n<@${duel.challenger}> vs <@${duel.opponent}>\nTaruhan: **${duel.wager} 🪙**\n\nPilih kartu yang akan digunakan`,
-          components: [new ActionRowBuilder().addComponents(cardSelect(duel.challenger, `card:pick:${duelId}`))]
+          content: `⚔️ **DUEL DIMULAI**\n\n<@${duel.challenger}> vs <@${duel.opponent}>\nTaruhan: **${duel.wager} 🪙**\n\nMasing-masing pemain pilih kartunya melalui menu di bawah`,
+          components: [
+            new ActionRowBuilder().addComponents(cardSelect(duel.challenger, `card:pick:${duelId}:${duel.challenger}`)),
+            new ActionRowBuilder().addComponents(cardSelect(duel.opponent, `card:pick:${duelId}:${duel.opponent}`))
+          ]
         });
       }
 
