@@ -4,7 +4,10 @@ const {
   REST,
   Routes,
   SlashCommandBuilder,
-  PermissionFlagsBits
+  PermissionFlagsBits,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle
 } = require('discord.js');
 
 const token = process.env.DISCORD_TOKEN;
@@ -18,6 +21,8 @@ if (!token) {
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
+
+const rpsGames = new Map();
 
 const commands = [
   new SlashCommandBuilder()
@@ -50,6 +55,21 @@ const commands = [
         .setDescription('Pertanyaan yang ingin ditanyakan')
         .setRequired(true)
         .setMaxLength(2000)
+    ),
+
+  new SlashCommandBuilder()
+    .setName('arcade')
+    .setDescription('Main game arcade bersama member lain')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('rps')
+        .setDescription('Tantang member lain bermain batu gunting kertas')
+        .addUserOption(option =>
+          option
+            .setName('lawan')
+            .setDescription('Member yang ingin ditantang')
+            .setRequired(true)
+        )
     )
 ].map(command => command.toJSON());
 
@@ -62,13 +82,80 @@ client.once('ready', async (readyClient) => {
       Routes.applicationCommands(readyClient.user.id),
       { body: commands }
     );
-    console.log('Global slash commands registered: /ping, /help, /clear, /tanya');
+    console.log('Global slash commands registered: /ping, /help, /clear, /tanya, /arcade');
   } catch (error) {
     console.error('Failed to register slash commands:', error);
   }
 });
 
 client.on('interactionCreate', async (interaction) => {
+  if (interaction.isButton()) {
+    const [type, gameId, choice] = interaction.customId.split(':');
+
+    if (type !== 'rps') return;
+
+    const game = rpsGames.get(gameId);
+    if (!game) {
+      return interaction.reply({
+        content: '❌ Game sudah berakhir atau tidak ditemukan',
+        ephemeral: true
+      });
+    }
+
+    if (interaction.user.id !== game.challenger && interaction.user.id !== game.opponent) {
+      return interaction.reply({
+        content: '❌ Kamu bukan pemain game ini',
+        ephemeral: true
+      });
+    }
+
+    if (game.choices[interaction.user.id]) {
+      return interaction.reply({
+        content: '❌ Kamu sudah memilih',
+        ephemeral: true
+      });
+    }
+
+    game.choices[interaction.user.id] = choice;
+    await interaction.reply({
+      content: '✅ Pilihan kamu sudah dicatat',
+      ephemeral: true
+    });
+
+    const players = [game.challenger, game.opponent];
+    if (players.every(id => game.choices[id])) {
+      const names = { rock: '🪨 Batu', paper: '📄 Kertas', scissors: '✂️ Gunting' };
+      const a = game.choices[game.challenger];
+      const b = game.choices[game.opponent];
+      let result;
+
+      if (a === b) {
+        result = '🤝 **Seri!**';
+      } else if (
+        (a === 'rock' && b === 'scissors') ||
+        (a === 'paper' && b === 'rock') ||
+        (a === 'scissors' && b === 'paper')
+      ) {
+        result = `🏆 <@${game.challenger}> **menang!**`;
+      } else {
+        result = `🏆 <@${game.opponent}> **menang!**`;
+      }
+
+      await interaction.message.edit({
+        content:
+          `🎮 **HASIL RPS**\n\n` +
+          `<@${game.challenger}>: ${names[a]}\n` +
+          `<@${game.opponent}>: ${names[b]}\n\n` +
+          result,
+        components: []
+      });
+
+      rpsGames.delete(gameId);
+    }
+
+    return;
+  }
+
   if (!interaction.isChatInputCommand()) return;
 
   if (interaction.commandName === 'ping') {
@@ -82,7 +169,8 @@ client.on('interactionCreate', async (interaction) => {
         '`/ping` — Cek apakah bot aktif\n' +
         '`/help` — Lihat daftar bantuan bot\n' +
         '`/clear jumlah` — Hapus pesan di channel ini\n' +
-        '`/tanya pertanyaan` — Tanyakan sesuatu kepada AI',
+        '`/tanya pertanyaan` — Tanyakan sesuatu kepada AI\n' +
+        '`/arcade rps lawan` — Tantang member lain bermain batu gunting kertas',
       ephemeral: true
     });
   }
