@@ -66,7 +66,7 @@ client.on('interactionCreate', async interaction => {
         method: 'POST',
         headers: { 'x-goog-api-key': geminiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          systemInstruction: { parts: [{ text: 'Kamu adalah Hazelinos, asisten Discord yang ramah. Jawab dalam bahasa Indonesia kecuali pengguna meminta bahasa lain. Jawab dengan jelas, akurat, dan ringkas. Jangan mengarang fakta. Jika informasi bisa berubah, nyatakan ketidakpastian dan gunakan tanggal yang relevan.' }] },
+          systemInstruction: { parts: [{ text: 'Kamu adalah Hazelinos. Jawab langsung pertanyaan pengguna dalam bahasa Indonesia kecuali pengguna meminta bahasa lain. Jangan membuka jawaban dengan Halo, Hai, salam, sapaan, atau perkenalan kecuali pengguna memang menyapa terlebih dahulu. Jangan mengulang pertanyaan pengguna. Jawab dengan jelas, akurat, ringkas, dan natural. Jangan mengarang fakta. Jika informasi bisa berubah, nyatakan ketidakpastian dan gunakan tanggal yang relevan.' }] },
           contents: [{ role: 'user', parts: [{ text: question }] }],
           generationConfig: { maxOutputTokens: 1024 }
         })
