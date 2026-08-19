@@ -10,6 +10,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "discord.js": "^14.22.1"
+    "discord.js": "^14.22.1",
+    "groq-sdk": "^0.27.0"
   }
 }
