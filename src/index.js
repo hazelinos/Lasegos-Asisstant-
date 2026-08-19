@@ -8,7 +8,7 @@ const {
 } = require('discord.js');
 
 const token = process.env.DISCORD_TOKEN;
-const groqKey = process.env.GROQ_API_KEY;
+const geminiKey = process.env.GEMINI_API_KEY;
 
 if (!token) {
   console.error('Missing DISCORD_TOKEN environment variable.');
@@ -113,9 +113,9 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   if (interaction.commandName === 'tanya') {
-    if (!groqKey) {
+    if (!geminiKey) {
       return interaction.reply({
-        content: '❌ GROQ_API_KEY belum diatur di Environment',
+        content: '❌ GEMINI_API_KEY belum diatur di Environment',
         ephemeral: true
       });
     }
@@ -124,39 +124,50 @@ client.on('interactionCreate', async (interaction) => {
     await interaction.deferReply();
 
     try {
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${groqKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: 'openai/gpt-oss-20b',
-          messages: [
-            {
-              role: 'system',
-              content: 'Kamu adalah asisten Discord yang ramah. Jawab dalam bahasa Indonesia kecuali pengguna meminta bahasa lain. Jawab dengan jelas dan ringkas.'
+      const response = await fetch(
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
+        {
+          method: 'POST',
+          headers: {
+            'x-goog-api-key': geminiKey,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            systemInstruction: {
+              parts: [
+                {
+                  text: 'Kamu adalah Lasegos Assistant, asisten Discord yang ramah. Jawab dalam bahasa Indonesia kecuali pengguna meminta bahasa lain. Jawab dengan jelas, akurat, dan ringkas. Jangan mengarang fakta. Jika informasi bisa berubah, nyatakan ketidakpastian dan gunakan tanggal yang relevan.'
+                }
+              ]
             },
-            {
-              role: 'user',
-              content: question
+            contents: [
+              {
+                role: 'user',
+                parts: [{ text: question }]
+              }
+            ],
+            generationConfig: {
+              maxOutputTokens: 1024,
+              temperature: 0.7
             }
-          ],
-          temperature: 0.7,
-          max_tokens: 1024
-        })
-      });
+          })
+        }
+      );
 
       const data = await response.json();
 
       if (!response.ok) {
-        console.error('Groq API error:', data);
+        console.error('Gemini API error:', data);
         return interaction.editReply('❌ Gagal mendapatkan jawaban dari AI');
       }
 
-      const answer = data.choices?.[0]?.message?.content?.trim();
+      const answer = data.candidates?.[0]?.content?.parts
+        ?.map(part => part.text || '')
+        .join('')
+        .trim();
 
       if (!answer) {
+        console.error('Gemini returned no answer:', data);
         return interaction.editReply('❌ AI tidak memberikan jawaban');
       }
 
@@ -167,7 +178,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.followUp(chunks[i]);
       }
     } catch (error) {
-      console.error('Failed to contact Groq:', error);
+      console.error('Failed to contact Gemini:', error);
       await interaction.editReply('❌ Terjadi kesalahan saat menghubungi AI');
     }
   }
