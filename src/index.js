@@ -39,7 +39,20 @@ client.on('interactionCreate', async interaction => {
       const created = p.created ? `<t:${Math.floor(new Date(p.created).getTime() / 1000)}:D>` : 'Tidak diketahui';
       const bio = p.description?.trim() || 'Tidak ada bio';
       const games = p.games.length ? p.games.slice(0, 5).map(g => `**${g.name}** — ${Number(g.placeVisits || 0).toLocaleString('id-ID')} visits`).join('\n') : 'Tidak ada experience publik';
-      const embed = new EmbedBuilder().setColor(0x5865F2).setTitle(p.displayName || p.name).setURL(`https://www.roblox.com/users/${p.id}/profile`).setThumbnail(p.avatarUrl || null).addFields({ name: 'Username', value: `@${p.name}`, inline: true }, { name: 'User ID', value: String(p.id), inline: true }, { name: 'Bergabung', value: created, inline: true }, { name: 'Bio', value: bio.slice(0, 1024) }, { name: 'Experience', value: games.slice(0, 1024) }).setFooter({ text: 'Roblox Profile' });
+      const embed = new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setAuthor({ name: 'Roblox Profile' })
+        .setTitle(p.displayName || p.name)
+        .setURL(`https://www.roblox.com/users/${p.id}/profile`)
+        .setThumbnail(p.avatarUrl || null)
+        .addFields(
+          { name: 'Username', value: `@${p.name}`, inline: true },
+          { name: 'User ID', value: String(p.id), inline: true },
+          { name: 'Bergabung', value: created, inline: true },
+          { name: 'Bio', value: bio.slice(0, 1024) },
+          { name: 'Experience', value: games.slice(0, 1024) }
+        )
+        .setFooter({ text: 'Roblox Profile' });
       return interaction.editReply({ embeds: [embed] });
     } catch (error) { console.error('Roblox lookup error:', error); return interaction.editReply('❌ Gagal mengambil data Roblox. Coba lagi nanti'); }
   }
