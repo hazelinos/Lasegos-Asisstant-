@@ -22,7 +22,11 @@ const commands = [
     .addStringOption(option => option.setName('pertanyaan').setDescription('Pertanyaan yang ingin ditanyakan').setRequired(true).setMaxLength(2000)),
   new SlashCommandBuilder()
     .setName('roblox').setDescription('Cek profil Roblox')
-    .addStringOption(option => option.setName('username').setDescription('Username Roblox').setRequired(true).setMaxLength(20))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('profile').setDescription('Cek profil Roblox')
+        .addStringOption(option => option.setName('username').setDescription('Username Roblox').setRequired(true).setMaxLength(20))
+    )
 ].map(command => command.toJSON());
 
 client.once('ready', async readyClient => {
@@ -30,7 +34,7 @@ client.once('ready', async readyClient => {
   try {
     const rest = new REST({ version: '10' }).setToken(token);
     await rest.put(Routes.applicationCommands(readyClient.user.id), { body: commands });
-    console.log('Global slash commands registered: /ping, /help, /clear, /tanya, /roblox');
+    console.log('Global slash commands registered: /ping, /help, /clear, /tanya, /roblox profile');
   } catch (error) {
     console.error('Failed to register slash commands:', error);
   }
@@ -73,7 +77,7 @@ client.on('interactionCreate', async interaction => {
 
   if (interaction.commandName === 'help') {
     return interaction.reply({
-      content: '**Hazelinos**\n\n`/ping` — Cek apakah bot aktif\n`/help` — Lihat daftar bantuan bot\n`/clear jumlah` — Hapus pesan di channel ini\n`/tanya pertanyaan` — Tanyakan sesuatu kepada AI\n`/roblox username` — Cek profil Roblox',
+      content: '**Hazelinos**\n\n`/ping` — Cek apakah bot aktif\n`/help` — Lihat daftar bantuan bot\n`/clear jumlah` — Hapus pesan di channel ini\n`/tanya pertanyaan` — Tanyakan sesuatu kepada AI\n`/roblox profile username` — Cek profil Roblox',
       ephemeral: true
     });
   }
@@ -90,7 +94,7 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  if (interaction.commandName === 'roblox') {
+  if (interaction.commandName === 'roblox' && interaction.options.getSubcommand() === 'profile') {
     const username = interaction.options.getString('username', true);
     await interaction.deferReply();
     try {
@@ -100,12 +104,12 @@ client.on('interactionCreate', async interaction => {
       const created = profile.created ? `<t:${Math.floor(new Date(profile.created).getTime() / 1000)}:D>` : 'Tidak diketahui';
       const description = profile.description?.trim() || 'Tidak ada bio';
       const gameText = profile.games.length
-        ? profile.games.slice(0, 5).map(game => `🎮 **${game.name}** — ${Number(game.placeVisits || 0).toLocaleString('id-ID')} visits`).join('\n')
+        ? profile.games.slice(0, 5).map(game => `**${game.name}** — ${Number(game.placeVisits || 0).toLocaleString('id-ID')} visits`).join('\n')
         : 'Tidak ada experience publik';
 
       const embed = new EmbedBuilder()
         .setColor(0x5865F2)
-        .setTitle(`👤 ${profile.displayName || profile.name}`)
+        .setTitle(`${profile.displayName || profile.name}`)
         .setURL(`https://www.roblox.com/users/${profile.id}/profile`)
         .setThumbnail(profile.avatarUrl || null)
         .addFields(
@@ -113,9 +117,9 @@ client.on('interactionCreate', async interaction => {
           { name: 'User ID', value: String(profile.id), inline: true },
           { name: 'Bergabung', value: created, inline: true },
           { name: 'Bio', value: description.slice(0, 1024), inline: false },
-          { name: '🎮 Experience', value: gameText.slice(0, 1024), inline: false }
+          { name: 'Experience', value: gameText.slice(0, 1024), inline: false }
         )
-        .setFooter({ text: 'Hazelinos • Roblox Profile' });
+        .setFooter({ text: 'roblox Profil' });
 
       return interaction.editReply({ embeds: [embed] });
     } catch (error) {
