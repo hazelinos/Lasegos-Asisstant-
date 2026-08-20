@@ -38,18 +38,16 @@ client.on('interactionCreate', async interaction => {
       const p = await getRobloxProfile(username); if (!p) return interaction.editReply(`❌ Username Roblox **${username}** tidak ditemukan`);
       const created = p.created ? `<t:${Math.floor(new Date(p.created).getTime() / 1000)}:D>` : 'Tidak diketahui';
       const bio = p.description?.trim() || 'Tidak ada bio';
-      const games = p.games.length ? p.games.slice(0, 5).map(g => `**${g.name}** — ${Number(g.placeVisits || 0).toLocaleString('id-ID')} visits`).join('\n') : 'Tidak ada experience publik';
+      const games = p.games.length ? p.games.slice(0, 5).map(g => `**${g.name}**\n${Number(g.placeVisits || 0).toLocaleString('id-ID')} visits`).join('\n\n') : 'Tidak ada experience publik';
       const embed = new EmbedBuilder()
         .setColor(0x5865F2)
-        .setAuthor({ name: 'Roblox Profile' })
         .setTitle(p.displayName || p.name)
         .setURL(`https://www.roblox.com/users/${p.id}/profile`)
         .setThumbnail(p.avatarUrl || null)
+        .setDescription(`**@${p.name}**\n\n${bio.slice(0, 500)}`)
         .addFields(
-          { name: 'Username', value: `@${p.name}`, inline: true },
           { name: 'User ID', value: String(p.id), inline: true },
           { name: 'Bergabung', value: created, inline: true },
-          { name: 'Bio', value: bio.slice(0, 1024) },
           { name: 'Experience', value: games.slice(0, 1024) }
         )
         .setFooter({ text: 'Roblox Profile' });
