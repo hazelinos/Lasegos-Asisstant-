@@ -25,10 +25,7 @@ async function getRobloxProfile(username) {
   return { ...user, ...details, avatarUrl: avatar.data?.[0]?.imageUrl, games: games.data || [] };
 }
 async function getRobloxAvatar(userId) {
-  const [avatarRes, itemsRes] = await Promise.all([
-    fetch(`https://thumbnails.roblox.com/v1/users/avatar?userIds=${userId}&size=720x720&format=Png&isCircular=false`),
-    fetch(`https://avatar.roblox.com/v1/users/${userId}/avatar`)
-  ]);
+  const [avatarRes, itemsRes] = await Promise.all([fetch(`https://thumbnails.roblox.com/v1/users/avatar?userIds=${userId}&size=720x720&format=Png&isCircular=false`), fetch(`https://avatar.roblox.com/v1/users/${userId}/avatar`)]);
   if (!avatarRes.ok) throw new Error(`Roblox avatar thumbnail failed: ${avatarRes.status}`);
   const avatar = await avatarRes.json();
   const outfit = itemsRes.ok ? await itemsRes.json() : {};
@@ -64,7 +61,14 @@ client.on('interactionCreate', async interaction => {
       const p = await getRobloxProfile(username); if (!p) return interaction.editReply(`❌ Username Roblox **${username}** tidak ditemukan`);
       const { imageUrl, outfit } = await getRobloxAvatar(p.id);
       const items = formatAvatarItems(outfit);
-      const embed = new EmbedBuilder().setColor(0x5865F2).setDescription(`**Username**\n@${p.name}`).setImage(imageUrl || null).addFields({ name: 'Worn Items', value: items.slice(0, 1024) }).setFooter({ text: 'Roblox Avatar' });
+      const embed = new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setTitle('Username')
+        .setURL(`https://www.roblox.com/users/${p.id}/profile`)
+        .setDescription(`**[@${p.name}](https://www.roblox.com/users/${p.id}/profile)**`)
+        .setImage(imageUrl || null)
+        .addFields({ name: 'Worn Items', value: items.slice(0, 1024) })
+        .setFooter({ text: 'Roblox Avatar' });
       return interaction.editReply({ embeds: [embed] });
     } catch (error) { console.error('Roblox avatar error:', error); return interaction.editReply('❌ Gagal mengambil avatar Roblox. Coba lagi nanti'); }
   }
