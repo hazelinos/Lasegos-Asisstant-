@@ -9,154 +9,75 @@ const commands = [
   new SlashCommandBuilder().setName('help').setDescription('Lihat daftar bantuan bot'),
   new SlashCommandBuilder().setName('clear').setDescription('Hapus pesan di channel ini').addIntegerOption(o => o.setName('jumlah').setDescription('Jumlah pesan yang dihapus').setRequired(true).setMinValue(1).setMaxValue(100)).setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
   new SlashCommandBuilder().setName('ask').setDescription('Tanyakan sesuatu kepada AI').addStringOption(o => o.setName('pertanyaan').setDescription('Pertanyaan yang ingin ditanyakan').setRequired(true).setMaxLength(2000)),
-  new SlashCommandBuilder().setName('roblox').setDescription('Cek profil Roblox')
-    .addSubcommand(s => s.setName('profile').setDescription('Cek profil Roblox').addStringOption(o => o.setName('username').setDescription('Username Roblox').setRequired(true).setMaxLength(20)))
-    .addSubcommand(s => s.setName('avatar').setDescription('Lihat avatar Roblox').addStringOption(o => o.setName('username').setDescription('Username Roblox').setRequired(true).setMaxLength(20)))
+  new SlashCommandBuilder().setName('roblox').setDescription('Cek profil Roblox').addSubcommand(s => s.setName('profile').setDescription('Cek profil Roblox').addStringOption(o => o.setName('username').setDescription('Username Roblox').setRequired(true).setMaxLength(20))).addSubcommand(s => s.setName('avatar').setDescription('Cek avatar Roblox').addStringOption(o => o.setName('username').setDescription('Username Roblox').setRequired(true).setMaxLength(20)))
 ].map(c => c.toJSON());
-
 client.once('ready', async readyClient => {
   console.log(`Hazelinos online as ${readyClient.user.tag}`);
-  try {
-    const rest = new REST({ version: '10' }).setToken(token);
-    await rest.put(Routes.applicationCommands(readyClient.user.id), { body: commands });
-    console.log('Global slash commands registered: /ping, /help, /clear, /ask, /roblox profile, /roblox avatar');
-  } catch (error) { console.error('Failed to register slash commands:', error); }
+  try { const rest = new REST({ version: '10' }).setToken(token); await rest.put(Routes.applicationCommands(readyClient.user.id), { body: commands }); console.log('Global slash commands registered: /ping, /help, /clear, /ask, /roblox profile, /roblox avatar'); }
+  catch (error) { console.error('Failed to register slash commands:', error); }
 });
-
-async function getRobloxUser(username) {
-  const r = await fetch('https://users.roblox.com/v1/usernames/users', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ usernames: [username], excludeBannedUsers: false })
-  });
-  if (!r.ok) throw new Error(`Roblox user lookup failed: ${r.status}`);
-  const d = await r.json();
-  return d.data?.[0] || null;
-}
-
 async function getRobloxProfile(username) {
-  const user = await getRobloxUser(username);
-  if (!user) return null;
-  const [dr, ar, gr] = await Promise.all([
-    fetch(`https://users.roblox.com/v1/users/${user.id}`),
-    fetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${user.id}&size=420x420&format=Png&isCircular=false`),
-    fetch(`https://games.roblox.com/v2/users/${user.id}/games?accessFilter=Public&sortOrder=Desc&limit=10`)
-  ]);
-  const details = dr.ok ? await dr.json() : {};
-  const avatar = ar.ok ? await ar.json() : {};
-  const games = gr.ok ? await gr.json() : {};
+  const r = await fetch('https://users.roblox.com/v1/usernames/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ usernames: [username], excludeBannedUsers: false }) });
+  if (!r.ok) throw new Error(`Roblox user lookup failed: ${r.status}`);
+  const d = await r.json(), user = d.data?.[0]; if (!user) return null;
+  const [dr, ar, gr] = await Promise.all([fetch(`https://users.roblox.com/v1/users/${user.id}`), fetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${user.id}&size=420x420&format=Png&isCircular=false`), fetch(`https://games.roblox.com/v2/users/${user.id}/games?accessFilter=Public&sortOrder=Desc&limit=10`)]);
+  const details = dr.ok ? await dr.json() : {}, avatar = ar.ok ? await ar.json() : {}, games = gr.ok ? await gr.json() : {};
   return { ...user, ...details, avatarUrl: avatar.data?.[0]?.imageUrl, games: games.data || [] };
 }
-
-async function getRobloxAvatar(username) {
-  const user = await getRobloxUser(username);
-  if (!user) return null;
-  const [avatarRes, thumbnailRes] = await Promise.all([
-    fetch(`https://avatar.roblox.com/v1/users/${user.id}/avatar`),
-    fetch(`https://thumbnails.roblox.com/v1/users/avatar?userIds=${user.id}&size=720x720&format=Png&isCircular=false`)
+async function getRobloxAvatar(userId) {
+  const [avatarRes, itemsRes] = await Promise.all([
+    fetch(`https://thumbnails.roblox.com/v1/users/avatar?userIds=${userId}&size=720x720&format=Png&isCircular=false`),
+    fetch(`https://avatar.roblox.com/v1/users/${userId}/avatar`)
   ]);
-  const avatar = avatarRes.ok ? await avatarRes.json() : {};
-  const thumbnail = thumbnailRes.ok ? await thumbnailRes.json() : {};
-  return { ...user, avatar, avatarUrl: thumbnail.data?.[0]?.imageUrl };
+  if (!avatarRes.ok) throw new Error(`Roblox avatar thumbnail failed: ${avatarRes.status}`);
+  const avatar = await avatarRes.json();
+  const outfit = itemsRes.ok ? await itemsRes.json() : {};
+  return { imageUrl: avatar.data?.[0]?.imageUrl, outfit };
 }
-
+function formatAvatarItems(outfit) {
+  const assets = outfit.assets || [];
+  if (!assets.length) return 'Tidak ada item yang tersedia';
+  return assets.map(a => a.name).filter(Boolean).slice(0, 15).map(name => `**${name}**`).join('\n');
+}
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
   if (interaction.commandName === 'ping') return interaction.reply(`🏓 Pong! ${client.ws.ping}ms`);
-  if (interaction.commandName === 'help') return interaction.reply({ content: '**Hazelinos**\n\n`/ping` — Cek apakah bot aktif\n`/help` — Lihat daftar bantuan bot\n`/clear jumlah` — Hapus pesan di channel ini\n`/ask pertanyaan` — Tanyakan sesuatu kepada AI\n`/roblox profile username` — Cek profil Roblox\n`/roblox avatar username` — Lihat avatar Roblox', ephemeral: true });
-
+  if (interaction.commandName === 'help') return interaction.reply({ content: '**Hazelinos**\n\n`/ping` — Cek apakah bot aktif\n`/help` — Lihat daftar bantuan bot\n`/clear jumlah` — Hapus pesan di channel ini\n`/ask pertanyaan` — Tanyakan sesuatu kepada AI\n`/roblox profile username` — Cek profil Roblox\n`/roblox avatar username` — Cek avatar Roblox', ephemeral: true });
   if (interaction.commandName === 'clear') {
     if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageMessages)) return interaction.reply({ content: '❌ Kamu tidak punya izin **Manage Messages**', ephemeral: true });
-    try {
-      const deleted = await interaction.channel.bulkDelete(interaction.options.getInteger('jumlah', true), true);
-      return interaction.reply({ content: `🗑️ Berhasil menghapus **${deleted.size} pesan**`, ephemeral: true });
-    } catch (error) { console.error(error); return interaction.reply({ content: '❌ Gagal menghapus pesan', ephemeral: true }); }
+    try { const deleted = await interaction.channel.bulkDelete(interaction.options.getInteger('jumlah', true), true); return interaction.reply({ content: `🗑️ Berhasil menghapus **${deleted.size} pesan**`, ephemeral: true }); } catch (error) { console.error(error); return interaction.reply({ content: '❌ Gagal menghapus pesan', ephemeral: true }); }
   }
-
   if (interaction.commandName === 'roblox' && interaction.options.getSubcommand() === 'profile') {
-    const username = interaction.options.getString('username', true);
-    await interaction.deferReply();
+    const username = interaction.options.getString('username', true); await interaction.deferReply();
     try {
-      const p = await getRobloxProfile(username);
-      if (!p) return interaction.editReply(`❌ Username Roblox **${username}** tidak ditemukan`);
+      const p = await getRobloxProfile(username); if (!p) return interaction.editReply(`❌ Username Roblox **${username}** tidak ditemukan`);
       const created = p.created ? `<t:${Math.floor(new Date(p.created).getTime() / 1000)}:D>` : 'Tidak diketahui';
       const bio = p.description?.trim() || 'Tidak ada bio';
       const games = p.games.length ? p.games.slice(0, 5).map(g => `**${g.name}**\n${Number(g.placeVisits || 0).toLocaleString('id-ID')} visits`).join('\n\n') : 'Tidak ada experience publik';
-      const embed = new EmbedBuilder()
-        .setColor(0x5865F2)
-        .setTitle(p.displayName || p.name)
-        .setURL(`https://www.roblox.com/users/${p.id}/profile`)
-        .setThumbnail(p.avatarUrl || null)
-        .setDescription(`**@${p.name}**\n\n${bio.slice(0, 500)}`)
-        .addFields(
-          { name: 'User ID', value: String(p.id), inline: true },
-          { name: 'Bergabung', value: created, inline: true },
-          { name: 'Experience', value: games.slice(0, 1024) }
-        )
-        .setFooter({ text: 'Roblox Profile' });
+      const embed = new EmbedBuilder().setColor(0x5865F2).setTitle(p.displayName || p.name).setURL(`https://www.roblox.com/users/${p.id}/profile`).setThumbnail(p.avatarUrl || null).setDescription(`**@${p.name}**\n\n${bio.slice(0, 500)}`).addFields({ name: 'User ID', value: String(p.id), inline: true }, { name: 'Bergabung', value: created, inline: true }, { name: 'Experience', value: games.slice(0, 1024) }).setFooter({ text: 'Roblox Profile' });
       return interaction.editReply({ embeds: [embed] });
     } catch (error) { console.error('Roblox lookup error:', error); return interaction.editReply('❌ Gagal mengambil data Roblox. Coba lagi nanti'); }
   }
-
   if (interaction.commandName === 'roblox' && interaction.options.getSubcommand() === 'avatar') {
-    const username = interaction.options.getString('username', true);
-    await interaction.deferReply();
+    const username = interaction.options.getString('username', true); await interaction.deferReply();
     try {
-      const p = await getRobloxAvatar(username);
-      if (!p) return interaction.editReply(`❌ Username Roblox **${username}** tidak ditemukan`);
-
-      const typeLabels = {
-        'Hat': 'Hat', 'HairAccessory': 'Hair', 'FaceAccessory': 'Face', 'NeckAccessory': 'Neck',
-        'ShoulderAccessory': 'Shoulder', 'FrontAccessory': 'Front', 'BackAccessory': 'Back',
-        'WaistAccessory': 'Waist', 'Shirt': 'Shirt', 'Pants': 'Pants', 'TShirt': 'T-Shirt',
-        'Face': 'Face', 'Head': 'Head', 'Torso': 'Body', 'LeftArm': 'Left Arm', 'RightArm': 'Right Arm',
-        'LeftLeg': 'Left Leg', 'RightLeg': 'Right Leg'
-      };
-      const items = (p.avatar?.assets || []).filter(item => item.name);
-      const grouped = new Map();
-      for (const item of items) {
-        const type = typeLabels[item.assetType?.name] || item.assetType?.name || 'Item';
-        if (!grouped.has(type)) grouped.set(type, []);
-        grouped.get(type).push(item);
-      }
-      const lines = [...grouped.entries()].slice(0, 12).map(([type, list]) => {
-        const names = list.slice(0, 3).map(item => `[${item.name}](https://www.roblox.com/catalog/${item.id})`).join(', ');
-        return `**${type}** — ${names}`;
-      });
-      const wornItems = lines.length ? lines.join('\n') : 'Tidak ada item yang dapat ditampilkan';
-
-      const embed = new EmbedBuilder()
-        .setColor(0x5865F2)
-        .setTitle('Roblox Avatar')
-        .setURL(`https://www.roblox.com/users/${p.id}/profile`)
-        .setDescription(`**@${p.name}**`)
-        .setImage(p.avatarUrl || null)
-        .addFields({ name: 'Worn Items', value: wornItems.slice(0, 1024) })
-        .setFooter({ text: 'Roblox Avatar' });
+      const p = await getRobloxProfile(username); if (!p) return interaction.editReply(`❌ Username Roblox **${username}** tidak ditemukan`);
+      const { imageUrl, outfit } = await getRobloxAvatar(p.id);
+      const items = formatAvatarItems(outfit);
+      const embed = new EmbedBuilder().setColor(0x5865F2).setTitle(p.displayName || p.name).setURL(`https://www.roblox.com/users/${p.id}/profile`).setDescription(`@${p.name}`).setImage(imageUrl || null).addFields({ name: 'Worn Items', value: items.slice(0, 1024) }).setFooter({ text: 'Roblox Avatar' });
       return interaction.editReply({ embeds: [embed] });
-    } catch (error) { console.error('Roblox avatar error:', error); return interaction.editReply('❌ Gagal mengambil data avatar Roblox. Coba lagi nanti'); }
+    } catch (error) { console.error('Roblox avatar error:', error); return interaction.editReply('❌ Gagal mengambil avatar Roblox. Coba lagi nanti'); }
   }
-
   if (interaction.commandName === 'ask') {
     if (!geminiKey) return interaction.reply({ content: '❌ GEMINI_API_KEY belum diatur di Environment', ephemeral: true });
-    const question = interaction.options.getString('pertanyaan', true);
-    await interaction.deferReply();
+    const question = interaction.options.getString('pertanyaan', true); await interaction.deferReply();
     try {
-      const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent', {
-        method: 'POST',
-        headers: { 'x-goog-api-key': geminiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ systemInstruction: { parts: [{ text: 'Kamu adalah Hazelinos. Jawab langsung pertanyaan pengguna dalam bahasa Indonesia kecuali pengguna meminta bahasa lain. Jangan membuka jawaban dengan Halo, Hai, salam, sapaan, atau perkenalan kecuali pengguna memang menyapa terlebih dahulu. Jangan mengulang pertanyaan pengguna. Jawab dengan jelas, akurat, ringkas, dan natural. Jangan mengarang fakta. Jika informasi bisa berubah, nyatakan ketidakpastian dan gunakan tanggal yang relevan.' }] }, contents: [{ role: 'user', parts: [{ text: question }] }], generationConfig: { maxOutputTokens: 1024 } })
-      });
-      const data = await r.json();
-      if (!r.ok) { console.error('Gemini API error:', data); return interaction.editReply('❌ Gagal mendapatkan jawaban dari AI'); }
-      const answer = data.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('').trim();
-      if (!answer) return interaction.editReply('❌ AI tidak memberikan jawaban');
-      const chunks = answer.match(/[\s\S]{1,1900}/g) || [];
-      await interaction.editReply(chunks[0]);
-      for (let i = 1; i < chunks.length; i++) await interaction.followUp(chunks[i]);
+      const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent', { method: 'POST', headers: { 'x-goog-api-key': geminiKey, 'Content-Type': 'application/json' }, body: JSON.stringify({ systemInstruction: { parts: [{ text: 'Kamu adalah Hazelinos. Jawab langsung pertanyaan pengguna dalam bahasa Indonesia kecuali pengguna meminta bahasa lain. Jangan membuka jawaban dengan Halo, Hai, salam, sapaan, atau perkenalan kecuali pengguna memang menyapa terlebih dahulu. Jangan mengulang pertanyaan pengguna. Jawab dengan jelas, akurat, ringkas, dan natural. Jangan mengarang fakta. Jika informasi bisa berubah, nyatakan ketidakpastian dan gunakan tanggal yang relevan.' }] }, contents: [{ role: 'user', parts: [{ text: question }] }], generationConfig: { maxOutputTokens: 1024 } }) });
+      const data = await r.json(); if (!r.ok) { console.error('Gemini API error:', data); return interaction.editReply('❌ Gagal mendapatkan jawaban dari AI'); }
+      const answer = data.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('').trim(); if (!answer) return interaction.editReply('❌ AI tidak memberikan jawaban');
+      const chunks = answer.match(/[\s\S]{1,1900}/g) || []; await interaction.editReply(chunks[0]); for (let i = 1; i < chunks.length; i++) await interaction.followUp(chunks[i]);
     } catch (error) { console.error('Gemini error:', error); await interaction.editReply('❌ Terjadi kesalahan saat menghubungi AI'); }
   }
 });
-
 client.on('error', error => console.error('Discord client error:', error));
 client.login(token).catch(error => { console.error('Failed to login to Discord:', error.message); process.exit(1); });
