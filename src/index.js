@@ -64,7 +64,7 @@ client.on('interactionCreate', async interaction => {
       const p = await getRobloxProfile(username); if (!p) return interaction.editReply(`❌ Username Roblox **${username}** tidak ditemukan`);
       const { imageUrl, outfit } = await getRobloxAvatar(p.id);
       const items = formatAvatarItems(outfit);
-      const embed = new EmbedBuilder().setColor(0x5865F2).setTitle(p.displayName || p.name).setURL(`https://www.roblox.com/users/${p.id}/profile`).setDescription(`@${p.name}`).setImage(imageUrl || null).addFields({ name: 'Worn Items', value: items.slice(0, 1024) }).setFooter({ text: 'Roblox Avatar' });
+      const embed = new EmbedBuilder().setColor(0x5865F2).setDescription(`**Username**\n@${p.name}`).setImage(imageUrl || null).addFields({ name: 'Worn Items', value: items.slice(0, 1024) }).setFooter({ text: 'Roblox Avatar' });
       return interaction.editReply({ embeds: [embed] });
     } catch (error) { console.error('Roblox avatar error:', error); return interaction.editReply('❌ Gagal mengambil avatar Roblox. Coba lagi nanti'); }
   }
