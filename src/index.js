@@ -34,7 +34,13 @@ async function getRobloxAvatar(userId) {
 function formatAvatarItems(outfit) {
   const assets = outfit.assets || [];
   if (!assets.length) return 'Tidak ada item yang tersedia';
-  return assets.map(a => a.name).filter(Boolean).slice(0, 15).map(name => `**${name}**`).join('\n');
+  return assets.slice(0, 15).map(asset => {
+    const type = asset.assetType?.name || 'Item';
+    const name = asset.name || 'Unknown';
+    const url = asset.id ? `https://www.roblox.com/catalog/${asset.id}` : null;
+    const itemName = url ? `[${name}](${url})` : name;
+    return `**${type}** — ${itemName}`;
+  }).join('\n');
 }
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
@@ -61,13 +67,7 @@ client.on('interactionCreate', async interaction => {
       const p = await getRobloxProfile(username); if (!p) return interaction.editReply(`❌ Username Roblox **${username}** tidak ditemukan`);
       const { imageUrl, outfit } = await getRobloxAvatar(p.id);
       const items = formatAvatarItems(outfit);
-      const profileUrl = `https://www.roblox.com/users/${p.id}/profile`;
-      const embed = new EmbedBuilder()
-        .setColor(0x5865F2)
-        .setTitle('Username')
-        .setDescription(`@**[${p.name}](${profileUrl})**\n\n**Worn Items**\n${items.slice(0, 900)}`)
-        .setImage(imageUrl || null)
-        .setFooter({ text: 'Roblox Avatar' });
+      const embed = new EmbedBuilder().setColor(0x5865F2).setTitle('Username').setDescription(`**[@${p.name}](https://www.roblox.com/users/${p.id}/profile)**`).setImage(imageUrl || null).addFields({ name: 'Worn Items', value: items.slice(0, 1024) }).setFooter({ text: 'Roblox Avatar' });
       return interaction.editReply({ embeds: [embed] });
     } catch (error) { console.error('Roblox avatar error:', error); return interaction.editReply('❌ Gagal mengambil avatar Roblox. Coba lagi nanti'); }
   }
