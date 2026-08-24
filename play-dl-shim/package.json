@@ -1,0 +1,6 @@
+{
+  "name": "play-dl",
+  "version": "99.0.0",
+  "main": "index.js",
+  "private": true
+}
