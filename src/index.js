@@ -1,8 +1,8 @@
-const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, StringSelectMenuBuilder } = require('discord.js');
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, NoSubscriberBehavior } = require('@discordjs/voice');
 const play = require('play-dl');
 const { musicPanel } = require('./music-panel');
-const { getLibrary, addRecent, toggleLiked, createPlaylist, addToPlaylist } = require('./music');
+const { getLibrary, addRecent, toggleLiked } = require('./music');
 
 const token = process.env.DISCORD_TOKEN;
 const geminiKey = process.env.GEMINI_API_KEY;
@@ -72,7 +72,6 @@ async function startMusic(interaction, track) {
   addRecent(interaction.user.id, track);
   return { state };
 }
-function trackFromQuery(query, info) { return { title: info?.title || query, url: info?.url || query, duration: info?.durationRaw || '', thumbnail: info?.thumbnails?.[0]?.url || null }; }
 function musicNowPlaying(state) {
   const t = state?.current;
   if (!t) return musicPanel();
@@ -82,27 +81,81 @@ function musicNowPlaying(state) {
   return { embeds: [embed], components: [controls, library] };
 }
 
+function searchModal() {
+  return new ModalBuilder().setCustomId('music_search_modal').setTitle('Search & Play').addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('music_query').setLabel('Cari lagu').setPlaceholder('Contoh: The Weeknd - Blinding Lights').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100)));
+}
+
 client.on('interactionCreate', async interaction => {
-  if (interaction.isChatInputCommand()) {
-    if (interaction.commandName === 'music') return interaction.reply(musicPanel());
-    if (interaction.commandName === 'ping') return interaction.reply(`🏓 Pong! ${client.ws.ping}ms`);
-    if (interaction.commandName === 'help') return interaction.reply({ content: '**Hazelinos**\n\n`/music` — Buka music panel\n`/roblox profile username` — Cek profil Roblox\n`/roblox avatar username` — Cek avatar Roblox\n`/ask pertanyaan` — Tanya AI\n`/clear jumlah` — Hapus pesan', ephemeral: true });
-    if (interaction.commandName === 'clear') { if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageMessages)) return interaction.reply({ content: '❌ Kamu tidak punya izin **Manage Messages**', ephemeral: true }); try { const deleted = await interaction.channel.bulkDelete(interaction.options.getInteger('jumlah', true), true); return interaction.reply({ content: `🗑️ Berhasil menghapus **${deleted.size} pesan**`, ephemeral: true }); } catch { return interaction.reply({ content: '❌ Gagal menghapus pesan', ephemeral: true }); } }
-    if (interaction.commandName === 'roblox' && interaction.options.getSubcommand() === 'profile') { const username = interaction.options.getString('username', true); await interaction.deferReply(); try { const p = await getRobloxProfile(username); if (!p) return interaction.editReply(`❌ Username Roblox **${username}** tidak ditemukan`); const created = p.created ? `<t:${Math.floor(new Date(p.created).getTime() / 1000)}:D>` : 'Tidak diketahui'; const bio = p.description?.trim() || 'Tidak ada bio'; const games = p.games.length ? p.games.slice(0, 5).map(g => `**${g.name}**\n${Number(g.placeVisits || 0).toLocaleString('id-ID')} visits`).join('\n\n') : 'Tidak ada experience publik'; const embed = new EmbedBuilder().setColor(0x5865F2).setTitle(p.displayName || p.name).setURL(`https://www.roblox.com/users/${p.id}/profile`).setThumbnail(p.avatarUrl || null).setDescription(`**@${p.name}**\n\n${bio.slice(0, 500)}`).addFields({ name: 'User ID', value: String(p.id), inline: true }, { name: 'Bergabung', value: created, inline: true }, { name: 'Experience', value: games.slice(0, 1024) }).setFooter({ text: 'Roblox Profile' }); return interaction.editReply({ embeds: [embed] }); } catch { return interaction.editReply('❌ Gagal mengambil data Roblox.'); } }
-    if (interaction.commandName === 'roblox' && interaction.options.getSubcommand() === 'avatar') { const username = interaction.options.getString('username', true); await interaction.deferReply(); try { const p = await getRobloxProfile(username); if (!p) return interaction.editReply(`❌ Username Roblox **${username}** tidak ditemukan`); const { imageUrl, outfit } = await getRobloxAvatar(p.id); const embed = new EmbedBuilder().setColor(0x5865F2).setTitle('Username').setDescription(`**[@${p.name}](https://www.roblox.com/users/${p.id}/profile)**`).setImage(imageUrl || null).addFields({ name: 'Worn Items', value: formatAvatarItems(outfit).slice(0, 1024) }).setFooter({ text: 'Roblox Avatar' }); return interaction.editReply({ embeds: [embed] }); } catch { return interaction.editReply('❌ Gagal mengambil avatar Roblox.'); } }
-    if (interaction.commandName === 'ask') { if (!geminiKey) return interaction.reply({ content: '❌ GEMINI_API_KEY belum diatur di Environment', ephemeral: true }); const question = interaction.options.getString('pertanyaan', true); await interaction.deferReply(); try { const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent', { method: 'POST', headers: { 'x-goog-api-key': geminiKey, 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: question }] }], generationConfig: { maxOutputTokens: 1024 } }) }); const data = await r.json(); const answer = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('').trim(); return interaction.editReply(answer || '❌ AI tidak memberikan jawaban'); } catch { return interaction.editReply('❌ Terjadi kesalahan saat menghubungi AI'); } }
+  try {
+    if (interaction.isChatInputCommand()) {
+      if (interaction.commandName === 'music') return interaction.reply(musicPanel());
+      if (interaction.commandName === 'ping') return interaction.reply(`🏓 Pong! ${client.ws.ping}ms`);
+      if (interaction.commandName === 'help') return interaction.reply({ content: '**Hazelinos**\n\n`/music` — Buka music panel\n`/roblox profile username` — Cek profil Roblox\n`/roblox avatar username` — Cek avatar Roblox\n`/ask pertanyaan` — Tanya AI\n`/clear jumlah` — Hapus pesan', ephemeral: true });
+      if (interaction.commandName === 'clear') { if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageMessages)) return interaction.reply({ content: '❌ Kamu tidak punya izin **Manage Messages**', ephemeral: true }); try { const deleted = await interaction.channel.bulkDelete(interaction.options.getInteger('jumlah', true), true); return interaction.reply({ content: `🗑️ Berhasil menghapus **${deleted.size} pesan**`, ephemeral: true }); } catch { return interaction.reply({ content: '❌ Gagal menghapus pesan', ephemeral: true }); } }
+      if (interaction.commandName === 'roblox' && interaction.options.getSubcommand() === 'profile') { const username = interaction.options.getString('username', true); await interaction.deferReply(); try { const p = await getRobloxProfile(username); if (!p) return interaction.editReply(`❌ Username Roblox **${username}** tidak ditemukan`); const created = p.created ? `<t:${Math.floor(new Date(p.created).getTime() / 1000)}:D>` : 'Tidak diketahui'; const bio = p.description?.trim() || 'Tidak ada bio'; const games = p.games.length ? p.games.slice(0, 5).map(g => `**${g.name}**\n${Number(g.placeVisits || 0).toLocaleString('id-ID')} visits`).join('\n\n') : 'Tidak ada experience publik'; const embed = new EmbedBuilder().setColor(0x5865F2).setTitle(p.displayName || p.name).setURL(`https://www.roblox.com/users/${p.id}/profile`).setThumbnail(p.avatarUrl || null).setDescription(`**@${p.name}**\n\n${bio.slice(0, 500)}`).addFields({ name: 'User ID', value: String(p.id), inline: true }, { name: 'Bergabung', value: created, inline: true }, { name: 'Experience', value: games.slice(0, 1024) }).setFooter({ text: 'Roblox Profile' }); return interaction.editReply({ embeds: [embed] }); } catch { return interaction.editReply('❌ Gagal mengambil data Roblox.'); } }
+      if (interaction.commandName === 'roblox' && interaction.options.getSubcommand() === 'avatar') { const username = interaction.options.getString('username', true); await interaction.deferReply(); try { const p = await getRobloxProfile(username); if (!p) return interaction.editReply(`❌ Username Roblox **${username}** tidak ditemukan`); const { imageUrl, outfit } = await getRobloxAvatar(p.id); const embed = new EmbedBuilder().setColor(0x5865F2).setTitle('Username').setDescription(`**[@${p.name}](https://www.roblox.com/users/${p.id}/profile)**`).setImage(imageUrl || null).addFields({ name: 'Worn Items', value: formatAvatarItems(outfit).slice(0, 1024) }).setFooter({ text: 'Roblox Avatar' }); return interaction.editReply({ embeds: [embed] }); } catch { return interaction.editReply('❌ Gagal mengambil avatar Roblox.'); } }
+      if (interaction.commandName === 'ask') { if (!geminiKey) return interaction.reply({ content: '❌ GEMINI_API_KEY belum diatur di Environment', ephemeral: true }); const question = interaction.options.getString('pertanyaan', true); await interaction.deferReply(); try { const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent', { method: 'POST', headers: { 'x-goog-api-key': geminiKey, 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: question }] }], generationConfig: { maxOutputTokens: 1024 } }) }); const data = await r.json(); const answer = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('').trim(); return interaction.editReply(answer || '❌ AI tidak memberikan jawaban'); } catch { return interaction.editReply('❌ Terjadi kesalahan saat menghubungi AI'); } }
+    }
+
+    if (interaction.isStringSelectMenu() && interaction.customId === 'music_menu') {
+      const choice = interaction.values[0];
+      if (choice === 'search') return interaction.showModal(searchModal());
+      const lib = getLibrary(interaction.user.id);
+      if (choice === 'liked') {
+        const text = lib.liked.length ? lib.liked.slice(0, 10).map((t, i) => `${i + 1}. **${t.title}**`).join('\n') : 'Belum ada lagu yang disukai.';
+        return interaction.reply({ embeds: [new EmbedBuilder().setColor(0x1DB954).setTitle('❤️ Liked Songs').setDescription(text)], ephemeral: true });
+      }
+      if (choice === 'recent') {
+        const text = lib.recent.length ? lib.recent.slice(0, 10).map((t, i) => `${i + 1}. **${t.title}**`).join('\n') : 'Belum ada riwayat lagu.';
+        return interaction.reply({ embeds: [new EmbedBuilder().setColor(0x1DB954).setTitle('🕘 Recently Played').setDescription(text)], ephemeral: true });
+      }
+      if (choice === 'playlists') {
+        const names = Object.keys(lib.playlists);
+        const text = names.length ? names.map((name, i) => `${i + 1}. **${name}** — ${lib.playlists[name].length} lagu`).join('\n') : 'Belum ada playlist.';
+        return interaction.reply({ embeds: [new EmbedBuilder().setColor(0x1DB954).setTitle('📁 Playlists').setDescription(text)], ephemeral: true });
+      }
+    }
+
+    if (interaction.isModalSubmit() && interaction.customId === 'music_search_modal') {
+      const query = interaction.fields.getTextInputValue('music_query').trim();
+      await interaction.deferReply({ ephemeral: true });
+      try {
+        const results = await play.search(query, { limit: 8, source: { youtube: 'video' } });
+        if (!results.length) return interaction.editReply('❌ Lagu tidak ditemukan.');
+        const options = results.map((r, i) => ({ label: String(r.title || 'Unknown').slice(0, 100), description: `${r.channel?.name || 'Unknown artist'} • ${r.durationRaw || ''}`.slice(0, 100), value: r.url, emoji: '🎵' }));
+        const row = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('music_search_results').setPlaceholder('Pilih lagu untuk diputar').addOptions(options));
+        return interaction.editReply({ content: `🔎 Hasil pencarian untuk **${query}**`, components: [row] });
+      } catch (error) { console.error('Music search error:', error); return interaction.editReply('❌ Gagal mencari lagu. Coba lagi.'); }
+    }
+
+    if (interaction.isStringSelectMenu() && interaction.customId === 'music_search_results') {
+      await interaction.deferReply({ ephemeral: true });
+      const url = interaction.values[0];
+      try {
+        const info = await play.video_info(url);
+        const track = { title: info.video_details?.title || 'Unknown', url, duration: info.video_details?.durationRaw || '', thumbnail: info.video_details?.thumbnails?.[0]?.url || null };
+        const result = await startMusic(interaction, track);
+        if (result.error) return interaction.editReply(result.error);
+        return interaction.editReply({ content: `🎵 **${track.title}** ${result.state.current?.url === track.url ? 'sedang diputar.' : 'ditambahkan ke queue.'}` });
+      } catch (error) { console.error('Music play error:', error); return interaction.editReply('❌ Gagal memutar lagu. Pastikan kamu sudah masuk voice channel.'); }
+    }
+
+    if (!interaction.isButton()) return;
+    if (!interaction.customId.startsWith('music_')) return;
+    const state = queues.get(interaction.guildId);
+    if (interaction.customId === 'music_library') { const lib = getLibrary(interaction.user.id); const playlists = Object.keys(lib.playlists); const embed = new EmbedBuilder().setColor(0x1DB954).setTitle('📚 Your Library').setDescription(`❤️ Liked Songs: **${lib.liked.length}**\n📁 Playlists: **${playlists.length}**\n🕘 Recently Played: **${lib.recent.length}**`); return interaction.reply({ embeds: [embed], ephemeral: true }); }
+    if (!state) return interaction.reply({ content: '❌ Belum ada lagu yang sedang diputar.', ephemeral: true });
+    if (interaction.customId === 'music_pause') { state.player.state.status === AudioPlayerStatus.Paused ? state.player.unpause() : state.player.pause(); return interaction.update(musicNowPlaying(state)); }
+    if (interaction.customId === 'music_skip') { state.player.stop(); return interaction.update(musicNowPlaying(state)); }
+    if (interaction.customId === 'music_stop') { state.queue.length = 0; state.current = null; state.player.stop(); if (state.connection) state.connection.destroy(); queues.delete(interaction.guildId); return interaction.update(musicPanel()); }
+    if (interaction.customId === 'music_loop') { state.loop = !state.loop; return interaction.update(musicNowPlaying(state)); }
+    if (interaction.customId === 'music_like') { if (!state.current) return interaction.reply({ content: '❌ Tidak ada lagu.', ephemeral: true }); const liked = toggleLiked(interaction.user.id, state.current); return interaction.reply({ content: liked ? '❤️ Ditambahkan ke Liked Songs.' : '💔 Dihapus dari Liked Songs.', ephemeral: true }); }
+    if (interaction.customId === 'music_queue') { const text = state.queue.length ? state.queue.slice(0, 10).map((t, i) => `${i + 1}. ${t.title}`).join('\n') : 'Queue kosong'; return interaction.reply({ embeds: [new EmbedBuilder().setColor(0x1DB954).setTitle('📜 Queue').setDescription(text)], ephemeral: true }); }
+  } catch (error) {
+    console.error('Interaction error:', error);
+    if (!interaction.replied && !interaction.deferred) return interaction.reply({ content: '❌ Terjadi kesalahan.', ephemeral: true }).catch(() => {});
+    if (interaction.deferred && !interaction.replied) return interaction.editReply('❌ Terjadi kesalahan.').catch(() => {});
   }
-  if (!interaction.isButton()) return;
-  if (!interaction.customId.startsWith('music_')) return;
-  const state = queues.get(interaction.guildId);
-  if (interaction.customId === 'music_library') { const lib = getLibrary(interaction.user.id); const playlists = Object.keys(lib.playlists); const embed = new EmbedBuilder().setColor(0x1DB954).setTitle('📚 Your Library').setDescription(`❤️ Liked Songs: **${lib.liked.length}**\n📁 Playlists: **${playlists.length}**\n🕘 Recently Played: **${lib.recent.length}**`); return interaction.reply({ embeds: [embed], ephemeral: true }); }
-  if (!state) return interaction.reply({ content: '❌ Belum ada lagu yang sedang diputar.', ephemeral: true });
-  if (interaction.customId === 'music_pause') { state.player.state.status === AudioPlayerStatus.Paused ? state.player.unpause() : state.player.pause(); return interaction.update(musicNowPlaying(state)); }
-  if (interaction.customId === 'music_skip') { state.player.stop(); return interaction.update(musicNowPlaying(state)); }
-  if (interaction.customId === 'music_stop') { state.queue.length = 0; state.current = null; state.player.stop(); if (state.connection) state.connection.destroy(); queues.delete(interaction.guildId); return interaction.update(musicPanel()); }
-  if (interaction.customId === 'music_loop') { state.loop = !state.loop; return interaction.update(musicNowPlaying(state)); }
-  if (interaction.customId === 'music_like') { if (!state.current) return interaction.reply({ content: '❌ Tidak ada lagu.', ephemeral: true }); const liked = toggleLiked(interaction.user.id, state.current); return interaction.reply({ content: liked ? '❤️ Ditambahkan ke Liked Songs.' : '💔 Dihapus dari Liked Songs.', ephemeral: true }); }
-  if (interaction.customId === 'music_queue') { const text = state.queue.length ? state.queue.slice(0, 10).map((t, i) => `${i + 1}. ${t.title}`).join('\n') : 'Queue kosong'; return interaction.reply({ embeds: [new EmbedBuilder().setColor(0x1DB954).setTitle('📜 Queue').setDescription(text)], ephemeral: true }); }
 });
 
 client.on('error', error => console.error('Discord client error:', error));
