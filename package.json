@@ -9,6 +9,7 @@
     "discord.js": "^14.22.1",
     "groq-sdk": "^0.27.0",
     "@discordjs/voice": "^0.19.0",
+    "play-dl": "file:./play-dl-shim",
     "youtube-dl-exec": "^3.1.12"
   }
 }
