@@ -3,13 +3,14 @@
   "version": "1.0.0",
   "description": "Lasegos Assistant Discord bot",
   "main": "src/index.js",
-  "scripts": { "start": "node src/index.js" },
-  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "discord.js": "^14.22.1",
-    "groq-sdk": "^0.27.0",
-    "@discordjs/voice": "^0.19.0",
-    "play-dl": "file:./play-dl-shim",
-    "youtube-dl-exec": "^3.1.12"
+    "groq-sdk": "^0.27.0"
   }
 }
