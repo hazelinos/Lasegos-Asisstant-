@@ -1,8 +1,0 @@
-[phases.setup]
-nixPkgs = ["python3", "ffmpeg", "deno"]
-
-[phases.install]
-cmds = ["which python3", "python3 --version", "which ffmpeg", "ffmpeg -version", "which deno", "deno --version", "npm ci"]
-
-[start]
-cmd = "which python3 && python3 --version && node src/index.js"
